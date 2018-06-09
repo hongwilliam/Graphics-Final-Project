@@ -39,6 +39,8 @@
 #include "stack.h"
 #include "gmath.h"
 
+int num_frames;
+char name[128];
 
 /*======== void first_pass() ==========
   Inputs:
@@ -56,36 +58,33 @@
 void first_pass() {
   //in order to use name and num_frames throughout
   //they must be extern variables
-  extern int num_frames;
-  extern char name[128];
 
-  int frame = 0;
-  int basename = 0;
+  num_frames = 1;
+  strcpy(name, "generic");
   int vary = 0;
 
   int i;
   for (i = 0; i < lastop; i++){
+
     if (op[i].opcode == FRAMES){
-      num_frames = op[i].op.frames.num_frames;
-      frame++; }
+      num_frames = op[i].op.frames.num_frames; }
 
     else if (op[i].opcode == BASENAME){
-      strcpy(name, op[i].op.basename.p->name);
-      basename++; }
+      strcpy(name,op[i].op.basename.p->name); }
 
-    else if (op[i].opcode == VARY){
-      vary++; }
+    else if (!varied && op[i].opcode == VARY){
+      vary = 1; }
+
   }
 
-  if (vary && !frame){
-    printf("You need frame to vary");
+  if (num_frames == 1 && vary){
+    printf("Need to specify number of total frames \n");
     exit(0); }
 
-  else if (frame && !basename){
-    strcpy(name, "animation");
-    printf("Basename not specified so 'animation' will be used"); }
+  if (num_frames!=1 && !strcmp(name, "generic") ){
+    printf("No basename found, default generic \n"); }
 
-  return;
+  printf("first pass finished\n");
 
 }
 
@@ -106,29 +105,67 @@ void first_pass() {
   appropirate value.
   ====================*/
 struct vary_node ** second_pass() {
-  struct vary_node** frames = malloc(sizeof(struct vary_node *) * num_frames);
-  int i, j;
-  for (i = 0; i < num_frames; i++){
-    struct vary_node * top = NULL;
 
-    for (j = 0; j < lastop; j++){
-      if ( op[j].opcode == VARY &&
-	         op[j].op.vary.start_frame <= i &&
-	         op[j].op.vary.end_frame >= i){
+  int i;
+  struct vary_node **knobs = (struct vary_node **) calloc(sizeof(struct vary_node *), num_frames);
+  for (i = 0; i < lastop; i++){
 
-      int start = op[j].op.vary.start_frame;
-      int end = op[j].op.vary.end_frame;
-      float percent = (i - start) / (double) (end - start);
-	    struct vary_node * node = (struct vary_node *) malloc(sizeof(struct vary_node));
-	    strcpy(node->name, op[j].op.vary.p->name);
-	    node->value = op[j].op.vary.start_val + percent * (op[j].op.vary.end_val - op[j].op.vary.start_val);
-	    node->next = top;
-	    top = node; }
+    if (op[i].opcode == VARY){
+      int current_frame;
+
+      for (current_frame = 0; current_frame < num_frames; current_frame++) {
+
+	       if (!knobs[current_frame]) {
+	          if (op[i].op.vary.start_frame >= 0 && op[i].op.vary.start_frame <= op[i].op.vary.end_frame &&
+	              op[i].op.vary.end_frame > 0 && current_frame <= op[i].op.vary.end_frame &&
+                current_frame >= op[i].op.vary.start_frame){
+
+
+                double step = (op[i].op.vary.end_val - op[i].op.vary.start_val) / (op[i].op.vary.end_frame - op[i].op.vary.start_frame);
+                struct vary_node* set = (struct vary_node *)malloc(sizeof(struct vary_node));
+	              strcpy(set->name, op[i].op.vary.p->name);
+          	    set->value = step * (current_frame - op[i].op.vary.start_frame);
+          	    set->next = NULL;
+	              knobs[current_frame] = set;
+	              continue;
+            }
+	       }
+
+
+	       struct vary_node* check = knobs[current_frame];
+	       while (check->next){
+	          if (!strcmp(check->name, op[i].op.vary.p->name)){
+	             if (op[i].op.vary.start_frame >=0 && op[i].op.vary.start_frame <= op[i].op.vary.end_frame &&
+		               current_frame >= op[i].op.vary.start_frame && op[i].op.vary.end_frame >=0 &&
+		               current_frame <= op[i].op.vary.end_frame) {
+
+	                 double step = (op[i].op.vary.end_val - op[i].op.vary.start_val) / (op[i].op.vary.end_frame - op[i].op.vary.start_frame);
+	                 check->value = step*(current_frame - op[i].op.vary.start_frame);
+	                 break;
+	              }
+            }
+
+            check = check->next;
+	       }
+
+	      if (op[i].op.vary.start_frame >= 0 && op[i].op.vary.start_frame <= op[i].op.vary.end_frame &&
+	          op[i].op.vary.end_frame >= 0 && current_frame <= op[i].op.vary.end_frame &&
+	          current_frame >= op[i].op.vary.start_frame){
+
+	          double step = (op[i].op.vary.end_val - op[i].op.vary.start_val) / (op[i].op.vary.end_frame - op[i].op.vary.start_frame);
+            struct vary_node* set = (struct vary_node *)malloc(sizeof(struct vary_node));
+	          strcpy(set->name, op[i].op.vary.p->name);
+	          set->value = op[i].op.vary.start_val + (step * (current_frame - op[i].op.vary.start_frame) );
+	          set->next = NULL;
+	          check->next=set;
+	       }
+      }
     }
-
-    frames[i] = top;
   }
-  return frames;
+
+
+  printf("second pass finished\n");
+  return knobs;
 }
 
 /*======== void print_knobs() ==========
