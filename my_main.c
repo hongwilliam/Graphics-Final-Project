@@ -72,7 +72,7 @@ void first_pass() {
     else if (op[i].opcode == BASENAME){
       strcpy(name,op[i].op.basename.p->name); }
 
-    else if (!varied && op[i].opcode == VARY){
+    else if (!vary && op[i].opcode == VARY){
       vary = 1; }
 
   }
