@@ -165,6 +165,16 @@ struct vary_node ** second_pass() {
 
 
   printf("second pass finished\n");
+  int r;
+  for (r = 0; r < num_frames; r++) {
+    struct vary_node * temp = knobs[r];
+    printf("frame %d\n",r);
+    while (temp){
+      printf("knob [%s], value [%f]\n", temp->name, temp->value);
+      temp = temp->next;
+    }
+  }
+
   return knobs;
 }
 
